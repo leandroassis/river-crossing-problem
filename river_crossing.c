@@ -6,107 +6,78 @@
 #define TRIPULACAO_NECESSARIA           4   // cadeiras nos barcos
 #define TOTAL_DE_BARCOS                 10  // barcos que zarparão 
 
-typedef enum {
-    esperando,
-    boarded,
-    capitao
-} cargo;
-
 pthread_mutex_t mutex_contador = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t mutex_altera_estado_hacker = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t mutex_altera_estado_serf = PTHREAD_MUTEX_INITIALIZER;
 
 pthread_cond_t acorda_serf = PTHREAD_COND_INITIALIZER;
 pthread_cond_t acorda_hacker = PTHREAD_COND_INITIALIZER;
 
-unsigned short int hackers_boarded = 0;
-unsigned short int serfs_boarded = 0;
+unsigned short int hackers_na_fila = 0;
+unsigned short int serfs_na_fila = 0;
 
 void rowBoat(){
     printf("Remando o barco.\n");
 }
 
-cargo board(int profissao){
-    int hackers, serfs;
-
-    pthread_mutex_lock(&mutex_contador);
-    hackers = hackers_boarded;
-    serfs = serfs_boarded;
-    pthread_mutex_unlock(&mutex_contador);
-
-    if(hackers+serfs == TRIPULACAO_NECESSARIA) return esperando;
-
-    switch(profissao){
-        case 0:
-            if ((hackers == 0) || ((hackers == 1) && (serfs != 2)) || ((hackers == 2) && (serfs <= 1))){
-                pthread_mutex_lock(&mutex_contador);
-                printf("Serf entrando no barco.\n");
-                serfs_boarded++;
-                pthread_mutex_unlock(&mutex_contador);
-                pthread_cond_signal(&acorda_serf);
-
-                if(hackers+serfs == TRIPULACAO_NECESSARIA-1) return capitao;
-                return boarded;
-            }
-        case 1:
-            if ((serfs == 0) || ((serfs == 1) && (hackers != 2)) || ((serfs == 2) && (hackers <= 1))){
-                pthread_mutex_lock(&mutex_contador);
-                printf("Hacker entrando no barco.\n");
-                hackers_boarded++;
-                pthread_mutex_unlock(&mutex_contador);
-                pthread_cond_signal(&acorda_hacker);
-
-                if(hackers+serfs == TRIPULACAO_NECESSARIA-1) return capitao;
-                return boarded;
-            }
-    }
-
-    return esperando;
+void board(int cargo){
+    if(cargo) printf("Serf entrando no barco.\n");
+    else printf("Hacker entrando no barco.\n");
 }
 
 void *serf(void *arg){
-    cargo estado;
-    
-    estado = board(0);
-    
-    pthread_mutex_lock(&mutex_altera_estado_serf);
-    while(estado == esperando){
-        pthread_cond_wait(&acorda_serf, &mutex_altera_estado_serf);
-        estado = board(0);
-    }
-    pthread_mutex_unlock(&mutex_altera_estado_serf);
+    pthread_mutex_lock(&mutex_contador);
 
-    if(estado == capitao){
-        pthread_mutex_lock(&mutex_contador);
-        hackers_boarded = 0;
-        serfs_boarded = 0;
+    if(serfs_na_fila == 3){
+        pthread_cond_signal(&acorda_serf);
+        pthread_cond_signal(&acorda_serf);
+        pthread_cond_signal(&acorda_serf);
+        serfs_na_fila -= 3;
+        board(1);
         rowBoat();
-        pthread_mutex_unlock(&mutex_contador);
     }
-    
+    else if((serfs_na_fila >= 1) && (hackers_na_fila >= 2)){
+        pthread_cond_signal(&acorda_hacker);
+        pthread_cond_signal(&acorda_hacker);
+        pthread_cond_signal(&acorda_serf);
+        serfs_na_fila--;
+        hackers_na_fila-=2;
+        board(1);
+        rowBoat();
+    }
+    else{
+        serfs_na_fila++;
+        pthread_cond_wait(&acorda_serf, &mutex_contador);
+        board(1);
+    }
+    pthread_mutex_unlock(&mutex_contador);
     pthread_exit(NULL);
 }
 
 void *hacker(void *arg){
-    cargo estado;
-    
-    estado = board(1);
-    
-    pthread_mutex_lock(&mutex_altera_estado_hacker);
-    while(estado == esperando){
-        pthread_cond_wait(&acorda_hacker, &mutex_altera_estado_hacker);
-        estado = board(1);
-    }
-    pthread_mutex_unlock(&mutex_altera_estado_hacker);
+    pthread_mutex_lock(&mutex_contador);
 
-    if(estado == capitao){
-        pthread_mutex_lock(&mutex_contador);
-        hackers_boarded = 0;
-        serfs_boarded = 0;
+    if(hackers_na_fila == 3){
+        pthread_cond_signal(&acorda_hacker);
+        pthread_cond_signal(&acorda_hacker);
+        pthread_cond_signal(&acorda_hacker);
+        hackers_na_fila -= 3;
+        board(0);
         rowBoat();
-        pthread_mutex_unlock(&mutex_contador);
     }
-    
+    else if((hackers_na_fila >= 1) && (serfs_na_fila >= 2)){
+        pthread_cond_signal(&acorda_hacker);
+        pthread_cond_signal(&acorda_serf);
+        pthread_cond_signal(&acorda_serf);
+        hackers_na_fila--;
+        serfs_na_fila-=2;
+        board(0);
+        rowBoat();
+    }
+    else{
+        hackers_na_fila++;
+        pthread_cond_wait(&acorda_hacker, &mutex_contador);
+        board(0);
+    }
+    pthread_mutex_unlock(&mutex_contador);
     pthread_exit(NULL);
 }
 
