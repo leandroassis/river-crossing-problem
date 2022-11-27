@@ -1,5 +1,8 @@
+/**
+ * Grupo: Leandro Assis e Gabriel Peçanha
+ * "Solução" inspirada no código: https://cs162.org/static/exams/fa99-mt1-solutions.pdf
+*/
 #include <stdio.h>
-#include <unistd.h>
 #include <pthread.h>
 
 #define QTD_SERFS_GERADOS               100 // número de serfs para cruzar
